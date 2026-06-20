@@ -1,10 +1,8 @@
-/* ====================================================================
-   إعدادات عامة للمتجر
-==================================================================== */
 const CONFIG = {
-  storeName: "DZ Express Online Shop",
-  // رابط Google Apps Script Web App (شرح الحصول عليه في README.md)
-  // مثال: "https://script.google.com/macros/s/AKfycb.../exec"
-  APPS_SCRIPT_URL: "",
-  whatsapp: "" // رقم واتساب اختياري، مثال: "213555000000"
+  // رابط API الخاص بـ SheetDB
+  API_BASE_URL: "https://sheetdb.io/api/v1/u2bi74veb32hq",
+  
+  // أسماء الصفحات (Tabs) داخل الجوجل شيت
+  PRODUCTS_TAB: "Product",
+  ORDERS_TAB: "Orders"
 };
