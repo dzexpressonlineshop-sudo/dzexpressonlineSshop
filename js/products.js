@@ -1,11 +1,23 @@
-export default async function handler(req, res) {
-  const SHEETDB_URL = process.env.SHEETDB_URL; // سيقرأ الرابط من إعدادات Vercel بأمان
-  
-  try {
-    const response = await fetch(`${SHEETDB_URL}?sheet=Product`);
-    const data = await response.json();
-    return res.status(200).json(data);
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch products" });
-  }
+// دالة لجلب المنتجات من صفحة product في Google Sheet عبر SheetDB
+async function fetchProducts() {
+    try {
+        const response = await fetch(`${CONFIG.SHEETDB_API_URL}?sheet=product`);
+        if (!response.ok) throw new Error("فشل في جلب المنتجات");
+        const products = await response.json();
+        
+        // تحويل الأسعار إلى أرقام للتأكد من الحسابات لاحقاً
+        return products.map(p => ({
+            ...p,
+            price: parseFloat(p.price) || 0
+        }));
+    } catch (error) {
+        console.error("Error fetching products:", error);
+        return [];
+    }
+}
+
+// دالة للحصول على منتج واحد بـ ID (تُستخدم في صفحة الطلب)
+async function getProductById(id) {
+    const products = await fetchProducts();
+    return products.find(p => p.id == id);
 }
