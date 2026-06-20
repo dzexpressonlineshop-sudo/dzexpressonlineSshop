@@ -1,26 +1,149 @@
 document.addEventListener("DOMContentLoaded", async () => {
-  // 1. استخراج معرف المنتج من الرابط
-  const urlParams = new URLSearchParams(window.location.search);
-  const productId = urlParams.get('id');
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('id');
 
-  if (!productId) {
-    window.location.href = 'index.html';
-    return;
-  }
+    if (!productId) {
+        window.location.href = 'index.html';
+        return;
+    }
 
-  // جلب المنتجات للتأكد والعثور على المنتج المطلوب
-  const allProducts = await fetchProducts();
-  const product = allProducts.find(p => p.id == productId);
+    // جلب بيانات المنتج من الـ Sheet
+    const product = await getProductById(productId);
+    if (!product) {
+        document.getElementById("productSummary").innerHTML = "<p>المنتج غير موجود!</p>";
+        return;
+    }
 
-  if (!product) {
-    alert("المنتج غير موجود!");
-    window.location.href = 'index.html';
-    return;
-  }
+    // عرض ملخص المنتج
+    const productSummary = document.getElementById("productSummary");
+    productSummary.innerHTML = `
+        <div class="summary-details">
+            <h3>${product.name}</h3>
+            <p class="price">${product.price} دج</p>
+        </div>
+    `;
 
-  // عرض ملخص المنتج
-  const productSummary = document.getElementById("productSummary");
-  if (productSummary) {
+    // تفعيل قائمة الولايات (يفترض وجود ملف wilayas.js يحتوي على القائمة)
+    const selectWilaya = document.getElementById("custWilaya");
+    if (typeof wilayasData !== 'undefined') {
+        wilayasData.forEach(w => {
+            const opt = document.createElement("option");
+            opt.value = w.id;
+            opt.textContent = `${w.id} - ${w.name}`;
+            selectWilaya.appendChild(opt);
+        });
+    }
+
+    const deliveryArea = document.getElementById("deliveryArea");
+    const totalBox = document.getElementById("totalBox");
+    const totalProduct = document.getElementById("totalProduct");
+    const totalDelivery = document.getElementById("totalDelivery");
+    const totalGrand = document.getElementById("totalGrand");
+
+    let selectedDeliveryPrice = 0;
+    let selectedDeliveryType = "";
+
+    // عند تغيير الولاية
+    selectWilaya.addEventListener("change", () => {
+        const wilayaId = selectWilaya.value;
+        if (!wilayaId) {
+            deliveryArea.innerHTML = '<span class="hint">اختر الولاية أولاً ليظهر لك سعر التوصيل</span>';
+            totalBox.style.display = "none";
+            return;
+        }
+
+        const wilaya = wilayasData.find(w => w.id == wilayaId);
+        deliveryArea.innerHTML = `
+            <label class="radio-label">
+                <input type="radio" name="delType" value="home" checked>
+                <span>توصيل للمنزل (${wilaya.home_price} دج)</span>
+            </label>
+            <label class="radio-label">
+                <input type="radio" name="delType" value="desk">
+                <span>توصيل للمكتب (${wilaya.desk_price} دج)</span>
+            </label>
+        `;
+
+        totalBox.style.display = "block";
+        updatePrices(wilaya);
+
+        // مراقبة تغيير طريقة التوصيل
+        deliveryArea.querySelectorAll('input[name="delType"]').forEach(radio => {
+            radio.addEventListener('change', () => updatePrices(wilaya));
+        });
+    });
+
+    function updatePrices(wilaya) {
+        const type = deliveryArea.querySelector('input[name="delType"]:checked').value;
+        selectedDeliveryPrice = type === 'home' ? wilaya.home_price : wilaya.desk_price;
+        selectedDeliveryType = type === 'home' ? 'توصيل للمنزل' : 'توصيل للمكتب';
+
+        totalProduct.textContent = `${product.price} دج`;
+        totalDelivery.textContent = `${selectedDeliveryPrice} دج`;
+        totalGrand.textContent = `${product.price + selectedDeliveryPrice} دج`;
+    }
+
+    // إرسال الاستمارة إلى SheetDB
+    const form = document.getElementById("orderForm");
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById("custName").value.trim();
+        const phone = document.getElementById("custPhone").value.trim();
+        const wilaya = selectWilaya.value;
+
+        // تحقق بسيط من المدخلات
+        if (!name || !phone || !wilaya || !selectedDeliveryType) {
+            alert("الرجاء ملء جميع الحقول المطلوبة");
+            return;
+        }
+
+        const submitBtn = document.getElementById("submitBtn");
+        const submitLabel = document.getElementById("submitLabel");
+        submitLabel.textContent = "جاري إرسال الطلب...";
+        submitBtn.disabled = true;
+
+        const orderId = "DZ-" + Math.floor(100000 + Math.random() * 900000);
+
+        // البيانات المتوافقة مع أعمدة صفحة orders
+        const orderData = {
+            "order_id": orderId,
+            "product_name": product.name,
+            "customer_name": name,
+            "phone": phone,
+            "wilaya": wilaya,
+            "delivery_type": selectedDeliveryType,
+            "delivery_price": selectedDeliveryPrice,
+            "total_price": product.price + selectedDeliveryPrice
+        };
+
+        try {
+            // الإرسال إلى SheetDB مع تحديد الصفحة ?sheet=orders
+            const response = await fetch(`${CONFIG.SHEETDB_API_URL}?sheet=orders`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ data: [orderData] })
+            });
+
+            if (response.ok) {
+                document.getElementById("orderView").classList.add("hidden");
+                document.getElementById("successView").classList.remove("hidden");
+                document.getElementById("orderIdDisplay").textContent = `رقم الطلبية: ${orderId}`;
+            } else {
+                throw new Error("حدث خطأ أثناء الإرسال");
+            }
+        } catch (error) {
+            console.error(error);
+            document.getElementById("submitError").classList.remove("hidden");
+        } finally {
+            submitLabel.textContent = "تأكيد الطلبية";
+            submitBtn.disabled = false;
+        }
+    });
+});
     productSummary.innerHTML = `
       <h3>${product.name}</h3>
       <p style="font-weight: bold; color: #b89345; font-size: 1.2rem;">${product.price} دج</p>
