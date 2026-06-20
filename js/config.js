@@ -1,8 +1,4 @@
 const CONFIG = {
-  // رابط API الخاص بـ SheetDB
-  API_BASE_URL: "https://sheetdb.io/api/v1/u2bi74veb32hq",
-  
-  // أسماء الصفحات (Tabs) داخل الجوجل شيت
-  PRODUCTS_TAB: "Product",
-  ORDERS_TAB: "Orders"
+    // ضع هنا رابط SheetDB الخاص بك
+    SHEETDB_API_URL: "https://sheetdb.io/api/v1/YOUR_API_ID"
 };
