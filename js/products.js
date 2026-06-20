@@ -1,27 +1,11 @@
-// مصفوفة المنتجات ستكون فارغة في البداية ويتم ملؤها من السيرفر
-let products = [];
-
-// دالة لجلب المنتجات من صفحة Product في الجوجل شيت عبر SheetDB
-async function fetchProducts() {
+export default async function handler(req, res) {
+  const SHEETDB_URL = process.env.SHEETDB_URL; // سيقرأ الرابط من إعدادات Vercel بأمان
+  
   try {
-    const response = await fetch(`${CONFIG.API_BASE_URL}?sheet=${CONFIG.PRODUCTS_TAB}`);
-    if (!response.ok) throw new Error("فشل في جلب المنتجات");
-    
+    const response = await fetch(`${SHEETDB_URL}?sheet=Product`);
     const data = await response.json();
-    
-    // تحويل الأسعار إلى أرقام للتأكد من الحسابات الصحيحة
-    products = data.map(p => ({
-      id: p.id,
-      name: p.name,
-      price: parseFloat(p.price) || 0,
-      description: p.description || "",
-      image: p.image || ""
-    }));
-    
-    return products;
+    return res.status(200).json(data);
   } catch (error) {
-    console.error("خطأ في جلب المنتجات:", error);
-    return [];
+    return res.status(500).json({ error: "Failed to fetch products" });
   }
 }
-];
