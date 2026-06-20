@@ -1,111 +1,161 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>إتمام الطلب — DZ Express Online Shop</title>
-<link rel="icon" href="assets/logo.png">
-<link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+document.addEventListener("DOMContentLoaded", async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('id');
 
-<header class="site-header">
-  <div class="container">
-    <a class="brand" href="index.html">
-      <img src="assets/logo.png" alt="DZ Express Online Shop">
-      <div class="brand-text">
-        <span class="name">DZ Express</span>
-        <span class="tag">Online Shop</span>
-      </div>
-    </a>
-    <div class="header-badge">🚚 توصيل لـ 58 ولاية</div>
-  </div>
-</header>
+    if (!productId) {
+        window.location.href = 'index.html';
+        return;
+    }
 
-<section class="section">
-  <div class="container">
-    <a href="index.html" class="back-link">→ رجوع للمنتجات</a>
+    // 1. تفعيل قائمة الولايات أولاً وقبل كل شيء لضمان ظهورها فوراً
+    const selectWilaya = document.getElementById("custWilaya");
+    if (selectWilaya && typeof wilayasData !== 'undefined') {
+        selectWilaya.innerHTML = '<option value="">اختر ولايتك</option>'; // تنظيف القائمة
+        wilayasData.forEach(w => {
+            const opt = document.createElement("option");
+            opt.value = w.id;
+            opt.textContent = `${w.id} - ${w.name}`;
+            selectWilaya.appendChild(opt);
+        });
+    }
 
-    <div class="order-wrap" id="orderView">
+    // 2. جلب بيانات المنتج من الـ Sheet
+    const product = await getProductById(productId);
+    if (!product) {
+        document.getElementById("productSummary").innerHTML = "<p>المنتج غير موجود أو حدث خطأ في التحميل!</p>";
+        return;
+    }
 
-      <div class="summary-card" id="productSummary"></div>
+    // عرض ملخص المنتج
+    const productSummary = document.getElementById("productSummary");
+    if (productSummary) {
+        productSummary.innerHTML = `
+            <div class="summary-details">
+                <h3>${product.name}</h3>
+                <p class="price">${product.price} دج</p>
+            </div>
+        `;
+    }
 
-      <form class="form-card" id="orderForm" novalidate>
+    const deliveryArea = document.getElementById("deliveryArea");
+    const totalBox = document.getElementById("totalBox");
+    const totalProduct = document.getElementById("totalProduct");
+    const totalDelivery = document.getElementById("totalDelivery");
+    const totalGrand = document.getElementById("totalGrand");
 
-        <div class="field" id="fieldName">
-          <label for="custName">الاسم الكامل</label>
-          <input type="text" id="custName" placeholder="مثال: أحمد بن علي" autocomplete="name">
-          <span class="error">المرجو إدخال الاسم</span>
-        </div>
+    let selectedDeliveryPrice = 0;
+    let selectedDeliveryType = "";
 
-        <div class="field" id="fieldPhone">
-          <label for="custPhone">رقم الهاتف</label>
-          <input type="tel" id="custPhone" placeholder="مثال: 0555123456" inputmode="numeric" autocomplete="tel">
-          <span class="error">المرجو إدخال رقم هاتف صحيح (9 أو 10 أرقام)</span>
-        </div>
+    // عند تغيير الولاية
+    if (selectWilaya) {
+        selectWilaya.addEventListener("change", () => {
+            const wilayaId = selectWilaya.value;
+            if (!wilayaId) {
+                if (deliveryArea) deliveryArea.innerHTML = '<span class="hint">اختر الولاية أولاً ليظهر لك سعر التوصيل</span>';
+                if (totalBox) totalBox.style.display = "none";
+                return;
+            }
 
-        <div class="field" id="fieldWilaya">
-          <label for="custWilaya">الولاية</label>
-          <select id="custWilaya">
-            <option value="">اختر ولايتك</option>
-          </select>
-          <span class="error">المرجو اختيار الولاية</span>
-        </div>
+            const wilaya = wilayasData.find(w => w.id == wilayaId);
+            if (!wilaya) return;
 
-        <div class="field" id="fieldDelivery">
-          <label>طريقة التوصيل</label>
-          <div id="deliveryArea">
-            <span class="hint">اختر الولاية أولاً ليظهر لك سعر التوصيل</span>
-          </div>
-          <span class="error">المرجو اختيار طريقة التوصيل</span>
-        </div>
+            if (deliveryArea) {
+                deliveryArea.innerHTML = `
+                    <label class="radio-label">
+                        <input type="radio" name="delType" value="home" checked>
+                        <span>توصيل للمنزل (${wilaya.home_price} دج)</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="delType" value="desk">
+                        <span>توصيل للمكتب (${wilaya.desk_price} دج)</span>
+                    </label>
+                `;
+            }
 
-        <div class="total-box" id="totalBox" style="display:none;">
-          <div class="total-row">
-            <span>سعر المنتج</span>
-            <span id="totalProduct">0 دج</span>
-          </div>
-          <div class="total-row">
-            <span>سعر التوصيل</span>
-            <span id="totalDelivery">0 دج</span>
-          </div>
-          <div class="total-row grand">
-            <span>المجموع الكلي</span>
-            <span id="totalGrand">0 دج</span>
-          </div>
-        </div>
+            if (totalBox) totalBox.style.display = "block";
+            updatePrices(wilaya);
 
-        <div id="submitError" class="submit-error hidden">حدث خطأ أثناء إرسال الطلب، حاول مرة أخرى.</div>
+            // مراقبة تغيير طريقة التوصيل
+            deliveryArea.querySelectorAll('input[name="delType"]').forEach(radio => {
+                radio.addEventListener('change', () => updatePrices(wilaya));
+            });
+        });
+    }
 
-        <button type="submit" class="btn btn-gold btn-block" id="submitBtn">
-          <span id="submitLabel">تأكيد الطلبية</span>
-        </button>
-      </form>
-    </div>
+    function updatePrices(wilaya) {
+        const checkedRadio = deliveryArea.querySelector('input[name="delType"]:checked');
+        if (!checkedRadio) return;
+        
+        const type = checkedRadio.value;
+        selectedDeliveryPrice = type === 'home' ? wilaya.home_price : wilaya.desk_price;
+        selectedDeliveryType = type === 'home' ? 'توصيل للمنزل' : 'توصيل للمكتب';
 
-    <div class="order-wrap hidden" id="successView">
-      <div class="success-card">
-        <div class="success-icon">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </div>
-        <h2>تم استلام طلبك بنجاح!</h2>
-        <p>سيتصل بك فريقنا قريباً لتأكيد الطلبية وموعد التوصيل.</p>
-        <div class="order-id" id="orderIdDisplay"></div>
-        <br>
-        <a href="index.html" class="btn btn-gold">العودة للمتجر</a>
-      </div>
-    </div>
+        if (totalProduct) totalProduct.textContent = `${product.price} دج`;
+        if (totalDelivery) totalDelivery.textContent = `${selectedDeliveryPrice} دج`;
+        if (totalGrand) totalGrand.textContent = `${product.price + selectedDeliveryPrice} دج`;
+    }
 
-  </div>
-</section>
+    // إرسال الاستمارة إلى SheetDB
+    const form = document.getElementById("orderForm");
+    if (form) {
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById("custName").value.trim();
+            const phone = document.getElementById("custPhone").value.trim();
+            const wilaya = selectWilaya.value;
 
-<footer class="site-footer">
-  <div class="container">
-    جميع الحقوق محفوظة &copy; <strong>DZ Express Online Shop</strong> — توصيل سريع وآمن لكل الجزائر
-  </div>
-</footer>
+            if (!name || !phone || !wilaya || !selectedDeliveryType) {
+                alert("الرجاء ملء جميع الحقول المطلوبة واختيار طريقة التوصيل");
+                return;
+            }
 
-<script src="js/config.js"></script>
+            const submitBtn = document.getElementById("submitBtn");
+            const submitLabel = document.getElementById("submitLabel");
+            if (submitLabel) submitLabel.textContent = "جاري إرسال الطلب...";
+            if (submitBtn) submitBtn.disabled = true;
+
+            const orderId = "DZ-" + Math.floor(100000 + Math.random() * 900000);
+
+            const orderData = {
+                "order_id": orderId,
+                "product_name": product.name,
+                "customer_name": name,
+                "phone": phone,
+                "wilaya": wilaya,
+                "delivery_type": selectedDeliveryType,
+                "delivery_price": selectedDeliveryPrice,
+                "total_price": product.price + selectedDeliveryPrice
+            };
+
+            try {
+                const response = await fetch(`${CONFIG.SHEETDB_API_URL}?sheet=orders`, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ data: [orderData] })
+                });
+
+                if (response.ok) {
+                    document.getElementById("orderView").classList.add("hidden");
+                    document.getElementById("successView").classList.remove("hidden");
+                    document.getElementById("orderIdDisplay").textContent = `رقم الطلبية: ${orderId}`;
+                } else {
+                    throw new Error("حدث خطأ أثناء الإرسال");
+                }
+            } catch (error) {
+                console.error(error);
+                const submitError = document.getElementById("submitError");
+                if (submitError) submitError.classList.remove("hidden");
+            } finally {
+                if (submitLabel) submitLabel.textContent = "تأكيد الطلبية";
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        });
+    }
+});
 <script src="js/products.js"></script>
 <script src="js/wilayas.js"></script>
 <script src="js/icons.js"></script>
